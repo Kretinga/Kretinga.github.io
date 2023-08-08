@@ -1,0 +1,57 @@
+body {
+    background-color: #000;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+}
+
+.jumbotron {
+    background-color: #222;
+    margin-top: 50px;
+    padding: 50px;
+}
+
+.post-list {
+    display: flex;
+    flex-direction: column-reverse; 
+}
+
+.post {
+    background-color: #333;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 10px; 
+    transition: background-color 0.3s;
+}
+
+.post:hover {
+    background-color: #444;
+}
+
+.post-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 5px;
+}
+
+.post-title {
+    font-size: 24px;
+    margin-top: 15px;
+    transition: color 0.3s;
+}
+
+.post-title:hover {
+    color: #f00;
+    text-decoration: none; 
+    border-bottom: 2px solid #f00;
+}
+
+.post-description {
+    margin-top: 10px;
+}
+
+/* Responsiveness */
+@media (max-width: 768px) {
+    .post {
+        margin-bottom: 15px;
+    }
+}
