@@ -15,11 +15,20 @@ body {
     flex-direction: column-reverse; 
 }
 
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #222;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
 .post {
     background-color: #333;
     padding: 20px;
     border-radius: 10px;
-    margin-bottom: 10px; 
+    margin-bottom: 20px;
     transition: background-color 0.3s;
 }
 
@@ -31,6 +40,7 @@ body {
     max-width: 100%;
     height: auto;
     border-radius: 5px;
+    margin-top: 10px;
 }
 
 .post-title {
@@ -47,6 +57,18 @@ body {
 
 .post-description {
     margin-top: 10px;
+}
+
+.golang-code {
+    background-color: #000; 
+    color: #f8f8f2;
+    padding: 10px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.golang-code code {
+    display: block;
 }
 
 /* Responsiveness */

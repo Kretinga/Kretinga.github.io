@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ejemplo de Post</title>
+    <link rel="stylesheet" type="text/css" href="/assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-go.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="jumbotron">
+            <h1 class="display-4">Chat Online en Golang</h1>
+            <p class="lead">Bienvenidos al primer post de mi blog! En este caso aprenderemos a crear un chat online en Golang</p>
+        </div>
+        
+        <div class="post-list">
+            <div class="post">
+                <h2 class="post-title">Script del Servidor (server.go)</h2>
+                <p class="post-description">El servidor será el encargado de manejar y aceptar las conexiones entre los clientes, además de ser el encargado de 
+                    reenviar los mensajes que mande un cliente a los demás clientes que estén en el servidor conectados <br> <br> PD: En este Post se tendrá en cuenta que tienes
+                    conocimientos básicos en Golang y sockets
+                </p>
+                
+                <p class="post-description">Lo primero que haremos será importar las siguientes librerías:</p>
+
+                <h3>Código en Go:</h3>
+                <pre class="golang-code"><code class="language-go">
+package main
+
+import (
+    "fmt"
+    "net"   // Nos va a permitir manejar los sockets
+    "sync"
+)
+                </code></pre>
+                
+                <p class="post-description">De acuerdo, ya tengamos una vez estas librerías importadas, nos toca crear una lista de conexiones activas
+                     de los clientes en el servidor:
+                </p>
+
+                <pre class="golang-code"><code class="language-go">
+package main
+
+import (
+	"fmt"
+	"net"
+	"sync"
+)
+
+var (
+	clients   = make(map[net.Conn]struct{}) // Diccionario que mantiene las conexiones activas de los clientes
+	clientsMu sync.Mutex                    // Mutex (semáforo binario) que se utiliza para sincronizar el acceso a la lista de clientes
+)
+                </code></pre>
+
+                <br>
+                <p class="post-description">Bien, una vez tengamos esto, ahora dentro de la función "main()" vamos a aceptar las conexiones y estableceremos un puerto por donde
+                    el servidor estará a la escucha:
+                </p>
+                <pre class="golang-code"><code class="language-go">
+func main() {
+    listener, err := net.Listen("tcp", ":12345") // La variable Listener se encargará de aceptar conexiones
+    if err != nil {
+        fmt.Println("Error al iniciar el servidor: ", err)
+        return
+    }
+    defer listener.Close()
+
+    fmt.Println("Servidor escuchando en el puerto 12345...")
+}
+                </code></pre> <br>
+                <p class="post-description">Ahora ya hemos preparado el servidor y está listo para encenderse y esperar conexiones, pero ahora necesitamos
+                    hacer que el servidor pueda aceptar conexiones y, que cuando un cliente se una al servidor, se le añada a la lista de clientes activos ( que hemos 
+                    creado arriba anteriormente )
+                </p>
+                <pre class="golang-code"><code class="language-go">
+func main() {
+	listener, err := net.Listen("tcp", ":12345")
+	if err != nil {
+		fmt.Println("Error al iniciar el servidor: ", err)
+		return
+	}
+	defer listener.Close()
+
+	fmt.Println("Servidor escuchando en el puerto 12345...")
+
+	for {
+		// Crear bucle infinito que permita que el servidor acepte continuamente neuvas ocnexiones de clientes
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error al aceptar la conexión", err)
+			continue
+		}
+
+		// Se Antes de pasar la conexión a `handleClient()` el servidor asegura que la conexión se registre en la lista de clientes activos
+		clientsMu.Lock()           // Se bloquea el mutex para garantizar que solo una goroutine pueda modificar la lista de clientes activos a la vez
+		clients[conn] = struct{}{} // Se agrega la conexión activa al mapa de clientes. Aquí `conn` es la conexión que se ha aceptado y se usa como clave en el mapa
+		clientsMu.Unlock()         // Se desbloquea el mutex después de realizar la modificación
+
+		go handleClient(conn) // Función
+	}
+}
+                </code></pre> <br>
+                <h3>Función handleClient</h3>
+                <p class="post-description">Ya hemos completado un 50% del código del servidor y ya hemos terminado la parte de la función "main".
+                    Ahora, nos toca crear una función que maneje los clientes y reenvíe los mensajes a todos los clientes para que ambos se puedan comunicar
+                    entre sí
+                </p>
+                <pre class="golang-code"><code class="language-go">
+func handleClient(conn net.Conn) {
+	defer func() {
+		clientsMu.Lock()
+		delete(clients, conn) // Elimina la conexión del mapa de clientes activos
+		clientsMu.Unlock()
+		conn.Close()
+	}()        
+                </code></pre> <br>
+                <p class="post-description">Ahora aquí viene la parte en donde el servidor distribuirá el mensaje de un cliente a otros clientes.
+                    La metodología es bastante sencilla, lo que haremos será iterirar por todos los clientes activos creados en el mapa `clients`,
+                    acto seguido, crearemos una condicional en donde, dependiendo de quien haya envíado un mensaje, se reenviará a X clientes
+                    (es decir, si yo envío un mensaje, a mi no se me va a reenviar ya que no tendría sentido verlo 2 veces, pero a los demás clientes si se les enviará)
+                </p>
+                <pre class="golang-code"><code class="language-go">
+    // Mensaje de bienvenida
+	mensajeBienvenida := "¡Bienvenido al chat en línea!"
+	conn.Write([]byte(mensajeBienvenida))
+
+	for {
+		// Leer mensaje del cliente
+		buffer := make([]byte, 4096)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error al recibir el mensaje: ", err)
+			return
+		}
+
+		mensajeCliente := string(buffer[:n])
+		fmt.Printf("Cliente: %s\n", mensajeCliente)
+
+		if mensajeCliente == "exit\n" {
+			fmt.Println("Cerrando conexión con el cliente...")
+			return
+		}
+
+		// Reenviar el mensaje a todos los demás clientes
+		clientsMu.Lock()
+		for client := range clients { // Iterar por todos los cliente activos en el mapa `clients`
+			if client != conn { // Esto verifica si la conexión actual (client) en el bucle no es la misma que la conexión que está manejando el cliente actual (conn). Esto es importante para evitar que un cliente reciba su propio mensaje.
+				_, err := client.Write([]byte("Cliente " + mensajeCliente)) // Si el cliente actual no es el mismo que el cliente que envió el mensaje, el servidor intenta escribir un mensaje en la conexión del cliente actual
+				if err != nil {
+					fmt.Println("Error al enviar el mensaje al cliente: ", err)
+				}
+			}
+		}
+		clientsMu.Unlock()  
+                </code></pre> <br>
+                <p class="post-description">Perfecto, ya hemos terminado el script del servidor, aquí está el código completo:</p>
+                <pre class="golang-code"><code class="language-go">
+package main
+
+import (
+	"fmt"
+	"net"
+	"sync"
+)
+
+var (
+	clients   = make(map[net.Conn]struct{}) // Diccionario que mantiene las conexiones activas de los clientes
+	clientsMu sync.Mutex                    // Mutex (semáforo binario) que se utiliza para sincronizar el acceso a la lista de clientes
+)
+
+func main() {
+	listener, err := net.Listen("tcp", ":12345")
+	if err != nil {
+		fmt.Println("Error al iniciar el servidor: ", err)
+		return
+	}
+	defer listener.Close()
+
+	fmt.Println("Servidor escuchando en el puerto 12345...")
+
+	for {
+		// Crear bucle infinito que permita que el servidor acepte continuamente neuvas ocnexiones de clientes
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error al aceptar la conexión", err)
+			continue
+		}
+
+		// Se Antes de pasar la conexión a `handleClient()` el servidor asegura que la conexión se registre en la lista de clientes activos
+		clientsMu.Lock()           // Se bloquea el mutex para garantizar que solo una goroutine pueda modificar la lista de clientes activos a la vez
+		clients[conn] = struct{}{} // Se agrega la conexión activa al mapa de clientes. Aquí `conn` es la conexión que se ha aceptado y se usa como clave en el mapa
+		clientsMu.Unlock()         // Se desbloquea el mutex después de realizar la modificación
+
+		go handleClient(conn) // Función
+	}
+}
+
+func handleClient(conn net.Conn) {
+	defer func() {
+		clientsMu.Lock()
+		delete(clients, conn) // Elimina la conexión del mapa de clientes activos
+		clientsMu.Unlock()
+		conn.Close()
+	}()
+
+	// Mensaje de bienvenida
+	mensajeBienvenida := "¡Bienvenido al chat en línea!"
+	conn.Write([]byte(mensajeBienvenida))
+
+	for {
+		// Leer mensaje del cliente
+		buffer := make([]byte, 4096)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error al recibir el mensaje: ", err)
+			return
+		}
+
+		mensajeCliente := string(buffer[:n])
+		fmt.Printf("Cliente: %s\n", mensajeCliente)
+
+		if mensajeCliente == "exit\n" {
+			fmt.Println("Cerrando conexión con el cliente...")
+			return
+		}
+
+		// Reenviar el mensaje a todos los demás clientes
+		clientsMu.Lock()
+		for client := range clients { // Iterar por todos los cliente activos en el mapa `clients`
+			if client != conn { // Esto verifica si la conexión actual (client) en el bucle no es la misma que la conexión que está manejando el cliente actual (conn). Esto es importante para evitar que un cliente reciba su propio mensaje.
+				_, err := client.Write([]byte("Cliente " + mensajeCliente)) // Si el cliente actual no es el mismo que el cliente que envió el mensaje, el servidor intenta escribir un mensaje en la conexión del cliente actual
+				if err != nil {
+					fmt.Println("Error al enviar el mensaje al cliente: ", err)
+				}
+			}
+		}
+		clientsMu.Unlock()
+	}
+}
+                </code></pre> <br> <br>
+                <h2 class="post-title">Script del Cliente (client.go)</h2>
+                <p class="post-description">El script del Cliente nos permitirá poder envíar y leer mensajes de otros clientes <br> Aquí importaremos 4 librerías y como ya sabemos, tenemos que unirnos al servidor en esta ocasión</p>
+
+                <pre class="golang-code"><code class="language-go">
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+)
+
+func main() {
+	conn, err := net.Dial("tcp", "127.0.0.1:12345")
+	if err != nil {
+		fmt.Println("Error al intentar conectarse al servidor: ", err)
+		return
+	}
+	defer conn.Close()
+
+	go receiveMessages(conn)
+                </code></pre> <br>
+                <p class="post-description">Una vez ya tengamos esto, ahora crearemos un bucle infinito en donde leeremos los mensajes de otros clientes
+                    (esto lo metemos dentro de la función "main")
+                </p> <br>
+                <pre class="golang-code"><code class="language-go">
+for {
+		// Leer mensaje del usuario
+		fmt.Print(">> ")
+		reader := bufio.NewReader(os.Stdin)
+		mensaje, _ := reader.ReadString('\n') // Lee una línea completa de texto desde la entrada estándar hasta que se encuentre un carácter de nueva linea
+
+		// Enviar mensaje al servidor
+		_, err := conn.Write([]byte(mensaje))
+		if err != nil {
+			fmt.Println("Error al enviar el mensaje: ", err)
+			return
+		}
+
+		if mensaje == "exit\n" {
+			fmt.Println("Cerrando cliente...")
+			return
+		}
+	}
+                </code></pre> <br>
+                <p class="post-description">Ahora viene la última parte del código, en donde crearemos una función donde
+                    recibiremos la respuesta del servidor cuando este nos intente enviar los mensajes de los otros clientes
+                </p>
+                <pre class="golang-code"><code class="language-go">
+func receiveMessages(conn net.Conn) {
+	for {
+		// Leer respuesta del servidor ( Otros clientes )
+		buffer := make([]byte, 4096)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error al recibir la respuesta del servidor: ", err)
+			return
+		}
+
+		mensajeServidor := string(buffer[:n])
+		fmt.Print(mensajeServidor)
+	}
+}
+                </code></pre>
+                <p class="post-description">Perfecto, ya hemos terminado el script del cliente, aquí está el código completo:</p>
+                <pre class="golang-code"><code class="language-go">
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"net"
+	"os"
+)
+
+func main() {
+	conn, err := net.Dial("tcp", "127.0.0.1:12345")
+	if err != nil {
+		fmt.Println("Error al intentar conectarse al servidor: ", err)
+		return
+	}
+	defer conn.Close()
+
+	go receiveMessages(conn)
+
+	for {
+		// Leer mensaje del usuario
+		fmt.Print(">> ")
+		reader := bufio.NewReader(os.Stdin)
+		mensaje, _ := reader.ReadString('\n') // Lee una línea completa de texto desde la entrada estándar hasta que se encuentre un carácter de nueva linea
+
+		// Enviar mensaje al servidor
+		_, err := conn.Write([]byte(mensaje))
+		if err != nil {
+			fmt.Println("Error al enviar el mensaje: ", err)
+			return
+		}
+
+		if mensaje == "exit\n" {
+			fmt.Println("Cerrando cliente...")
+			return
+		}
+	}
+}
+
+func receiveMessages(conn net.Conn) {
+	for {
+		// Leer respuesta del servidor ( Otros clientes )
+		buffer := make([]byte, 4096)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			fmt.Println("Error al recibir la respuesta del servidor: ", err)
+			return
+		}
+
+		mensajeServidor := string(buffer[:n])
+		fmt.Print(mensajeServidor)
+	}
+}
+                </code></pre>
+                <img src="/assets/img/posts/socket_chat_post-01.jpg" alt="Imagen del Post" class="post-image">
+                <p>Y aquí estaría nuestro código terminado! <br> En este caso se ve bastante simple ya que no hemos añadido muchas más funciones, pero poco a poco
+                iremos añadiendo nuevas cosas, os espero en el siguiente Post!</p>
+            </div>
+        </div>
+    </div>
+    <script>Prism.highlightAll();</script>
+</body>
+</html>
